@@ -247,6 +247,7 @@ Mô hình đạt được độ chính xác cao trong nhận diện cảm xúc t
 ## Người đóng góp
 
 - MAXIMUS_NHON
+- Dvknzz
 
 ## Lời cảm ơn
 
