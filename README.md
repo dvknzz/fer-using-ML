@@ -1,258 +1,166 @@
-# Facial Emotion Recognition
+# Xây dựng hệ thống khoa học phân tích & dự đoán ô nhiễm đô thị
 
-Một dự án Machine Learning nhận diện cảm xúc từ khuôn mặt người dùng mô hình học sâu kết hợp CNN-SIFT. Dự án bao gồm phần huấn luyện mô hình và ứng dụng web Django để nhận diện cảm xúc theo thời gian thực.
+> **Điểm cộng khủng trước hội đồng:** ngoài đo lường, hệ thống bổ sung mô-đun **AI dự đoán PM2.5/PM10 trong 30–60 phút** và **phát hiện bất thường** (sensor hư, đột biến chất lượng không khí). Đề tài thăng hạng từ *“hệ thống đo”* thành *“nền tảng khoa học phân tích & cảnh báo chủ động”*.
 
-## Tổng quan
+## 1. Tổng quan đề tài
 
-Dự án này sử dụng các kỹ thuật học máy để nhận diện bảy cảm xúc cơ bản:
-- Giận dữ (Anger)
-- Khinh miệt (Contempt)
-- Ghê tởm (Disgust)
-- Sợ hãi (Fear)
-- Vui vẻ (Happy)
-- Buồn bã (Sad)
-- Ngạc nhiên (Surprise)
+- **Sinh viên thực hiện:** Dương Vũ Khôi Nguyên – MSSV 21093401 – Email: khoi.nguyenust@gmail.com – SĐT: 032 686 4753  
+- **Phần cứng:** ESP32 30 pin + cảm biến bụi Plantower PMS7003 + cảm biến khí MQ135 + Raspberry Pi 4 + mạch PCB tuỳ chỉnh (kích thước 58x68 mm).
+- **Mục tiêu:** 
+  - Giám sát nồng độ PM1.0, PM2.5, PM10 và khí độc (gas) theo thời gian thực.
+  - Lưu trữ dữ liệu lịch sử trên InfluxDB, hiển thị dashboard trực quan (Grafana).
+  - **Dự đoán xu hướng ô nhiễm 30–60 phút** với mô hình LSTM/GRU/Random Forest.
+  - **Phát hiện bất thường** (Isolation Forest / Autoencoder) để nhận diện sensor lỗi, giá trị đột biến, hoặc sự kiện ô nhiễm bất thường.
+  - Cảnh báo realtime qua Firebase Cloud Messaging khi chỉ số vượt ngưỡng.
 
-Hệ thống sử dụng phương pháp mô hình hybrid kết hợp Convolutional Neural Networks (CNN), Scale-Invariant Feature Transform (SIFT), và Dense SIFT (DSIFT) để đạt độ chính xác cao trong nhận diện cảm xúc khuôn mặt trong các điều kiện ánh sáng và góc độ khác nhau.
+## 2. Các thành phần chính
 
-## Cấu trúc dự án
+| Thành phần | Mô tả |
+|------------|-------|
+| `firmware/` | Mã nguồn ESP32 đọc PMS7003 + MQ135, publish MQTT định dạng JSON. |
+| `backend/` | Backend chạy trên Raspberry Pi: ingest MQTT → InfluxDB, API FastAPI, mô hình dự đoán (LSTM/GRU/RF), mô hình bất thường (Isolation Forest/Autoencoder), scheduler tự động huấn luyện. |
+| `training/` | Script CLI huấn luyện/retrain mô hình từ dữ liệu trong InfluxDB. |
+| `edge/raspberry_pi/` | Docker-compose cho Pi (Mosquitto + InfluxDB + Grafana + Backend AI). |
+| `demo.ipynb`, `model.ipynb` | Notebook trống để bạn log dữ liệu/mô phỏng (tuỳ chỉnh thêm). |
 
+```text
+.
+├── firmware/
+│   └── esp32_air_monitor/esp32_air_monitor.ino
+├── backend/
+│   ├── api/main.py                 # FastAPI REST
+│   ├── config.py                   # Đọc .env
+│   ├── ingestion/mqtt_listener.py  # Bridge MQTT → Influx
+│   ├── models/                     # LSTM, GRU, RandomForest, IsolationForest, Autoencoder
+│   ├── services/                   # Forecasting & anomaly services
+│   ├── tasks/scheduler.py          # APScheduler tự động huấn luyện & kiểm tra bất thường
+│   └── requirements.txt
+├── training/
+│   ├── train_forecasting.py
+│   └── train_anomaly.py
+├── edge/raspberry_pi/
+│   ├── docker-compose.yml
+│   ├── backend.Dockerfile
+│   ├── backend.env
+│   └── influxdb.env
+└── README.md
 ```
-Facial-Emotion-Recognition/
-├── demo.ipynb               # Jupyter notebook demo tương tác với webcam
-├── model.ipynb              # Notebook huấn luyện và đánh giá mô hình
-├── model_deep/              # Thư mục chứa các mô hình đã huấn luyện
-│   ├── cnn.h5               # Mô hình CNN 
-│   ├── sift.h5              # Mô hình SIFT
-│   ├── dsift.h5             # Mô hình DSIFT
-│   ├── km_sift.joblib       # KMeans cho đặc trưng SIFT
-│   ├── km_dsift.joblib      # KMeans cho đặc trưng DSIFT
-│   ├── sc_s.joblib          # Scaler cho đặc trưng SIFT
-│   └── sc_d.joblib          # Scaler cho đặc trưng DSIFT
-├── media/                   # Ảnh và video mẫu
-└── emotion_recognition/     # Ứng dụng web Django
-    ├── face_emotion/        # Mã nguồn chính của ứng dụng
-    ├── static/              # Tệp tĩnh (CSS, JS)
-    ├── media/               # Thư mục lưu files tải lên và kết quả xử lý
-    ├── templates/           # Các mẫu HTML
-    ├── manage.py            # Script quản lý Django
-    ├── requirements.txt     # Các thư viện Python cần thiết
-    └── run_app.bat          # File batch để chạy ứng dụng (cho Windows)
-```
 
-## Các tính năng
+## 3. Luồng hoạt động tổng quát
 
-- **Nhận diện cảm xúc từ ảnh**: Tải lên ảnh chứa khuôn mặt và nhận kết quả dự đoán cảm xúc
-- **Xử lý video**: Tải lên video để phân tích cảm xúc theo từng khung hình
-- **Phân tích trực tiếp từ webcam**: Nhận diện cảm xúc theo thời gian thực từ webcam
-- **Mô hình hybrid**: Kết hợp CNN, SIFT và DSIFT để cải thiện độ chính xác
-- **Giao diện thân thiện**: UI rõ ràng, dễ sử dụng
+1. **ESP32** đọc PMS7003 (UART) + MQ135 (ADC) mỗi 10 giây, publish JSON qua MQTT (`sensors/airquality`).
+2. **MQTT bridge trên Raspberry Pi** (`backend/ingestion/mqtt_listener.py`) subscribe → ghi dữ liệu vào InfluxDB.
+3. **Grafana** kết nối InfluxDB để hiển thị dashboard lịch sử và realtime.
+4. **API FastAPI** cung cấp:
+   - `/metrics/latest`, `/metrics/history` – tra cứu dữ liệu hiện tại/lịch sử.
+   - `/forecast` – trả về dự đoán PM2.5 cho 30–60 phút tới.
+   - `/anomalies` – trả về danh sách bất thường (sensor lỗi, đột biến…).
+5. **Scheduler** tự động huấn luyện mô hình (mặc định 6 giờ/lần) và kiểm tra bất thường mỗi 15 phút. Bạn có thể trigger thủ công qua endpoint hoặc script trong `training/`.
+6. **Firebase Cloud Messaging (tuỳ chọn)**: tích hợp vào app Flutter để gửi push notification khi API phát hiện vượt ngưỡng hoặc anomaly.
 
-## Công nghệ sử dụng
+## 4. Tính năng nổi bật (thuyết phục hội đồng)
 
-- **Python 3.8+**
-- **TensorFlow 2.19+**: Triển khai mô hình CNN
-- **OpenCV 4.11+**: Xử lý ảnh và phát hiện khuôn mặt
-- **Scikit-learn 1.6+**: Các thành phần học máy
-- **Django 5.2+**: Framework ứng dụng web
-- **NumPy 2.1+**: Xử lý số học
-- **Pillow 11.2+**: Xử lý ảnh
+- **Dự đoán xu hướng ô nhiễm (PM2.5, PM10) 30–60 phút:**  
+  - Mô hình chuỗi thời gian LSTM/GRU tùy chọn Random Forest Regressor.  
+  - Input: dữ liệu quá khứ từ InfluxDB (PM2.5, PM10, Gas, PM1.0, timestamp).  
+  - Output: dự đoán PM2.5 tương lai → hỗ trợ ra quyết định sớm (cảnh báo khi chuẩn bị vượt chuẩn).
 
-## Cài đặt
+- **Phát hiện bất thường (Anomaly Detection):**  
+  - **Isolation Forest:** phát hiện điểm dị biệt do sensor lỗi hoặc môi trường.  
+  - **Autoencoder:** đo sai số tái tạo để bắt tín hiệu bất thường tinh vi.  
+  - Ứng dụng thực tế: cảnh báo sensor hỏng, cháy, kẹt xe, bụi thi công đột biến.
 
-### Yêu cầu
+- **Nâng cấp kế hoạch thực hiện:**  
+  - Bổ sung milestone huấn luyện mô hình AI (10/07–20/08) và báo cáo kết quả dự đoán/anomaly vào giữa kỳ.  
+  - Kết quả demo gồm dashboard Grafana + ứng dụng di động hiển thị dự đoán & cảnh báo.
 
-- Python 3.8 trở lên
-- Git
+## 5. Hướng dẫn triển khai
 
-### Các bước cài đặt
+### 5.1. Firmware ESP32
+1. Cài Arduino IDE hoặc PlatformIO, thêm board ESP32.
+2. Sửa thông tin WiFi & MQTT trong `firmware/esp32_air_monitor/esp32_air_monitor.ino`.
+3. Cài thư viện: `PubSubClient`, `ArduinoJson`, `ESP32 board defs`, `PMS7003` (nếu cần).
+4. Nạp code và kiểm tra Serial Monitor (115200 baud) để xem log.
 
-1. Clone repository:
+### 5.2. Raspberry Pi 4 (backend + dữ liệu)
+1. Cài Docker & Docker Compose.
+2. Chỉnh sửa token, mật khẩu trong `edge/raspberry_pi/*.env` (đặc biệt `INFLUX_TOKEN`).
+3. Deploy stack:
+   ```bash
+   cd edge/raspberry_pi
+   docker compose up -d
+   ```
+4. Tạo file `.env` tại gốc (copy nội dung `backend.env` nếu chạy ngoài Docker).
+5. Chạy bridge MQTT (nếu muốn chạy ngoài container):
+   ```bash
+   python -m backend.ingestion.mqtt_listener
+   ```
+6. Khởi chạy API:
+   ```bash
+   uvicorn backend.api.main:app --host 0.0.0.0 --port 8000
+   ```
+
+### 5.3. Huấn luyện mô hình
 ```bash
-git clone https://github.com/nhonhoccode/Facial-Emotion-Recognition.git
-cd Facial-Emotion-Recognition
+# Huấn luyện LSTM 30 phút
+python training/train_forecasting.py --model-type lstm --horizon 30 --history 1440
+
+# Huấn luyện Random Forest 60 phút
+python training/train_forecasting.py --model-type random_forest --horizon 60
+
+# Huấn luyện Isolation Forest
+python training/train_anomaly.py --detector-type isolation_forest --history 1440
+
+# Huấn luyện Autoencoder
+python training/train_anomaly.py --detector-type autoencoder --history 2880
 ```
+Các mô hình được lưu trong `backend/artifacts/` để API sử dụng.
 
-2. Cài đặt các thư viện cần thiết:
-```bash
-pip install -r emotion_recognition/requirements.txt
-```
+### 5.4. Sử dụng API
+- Swagger UI: `http://<raspberry-ip>:8000/docs`
+- Endpoints quan trọng:
+  - `GET /forecast?horizons=30&horizons=60`
+  - `POST /forecast/train`
+  - `GET /anomalies`
+  - `POST /anomalies/train`
 
-3. Chuẩn bị ứng dụng Django:
-```bash
-cd emotion_recognition
-python manage.py migrate
-```
+## 6. Dashboard & ứng dụng di động
 
-4. Chạy ứng dụng:
-```bash
-python manage.py runserver
-```
+- **Grafana:** tạo dashboard hiển thị realtime (PM1.0/2.5/10, Gas, predicted PM2.5, flags anomaly).
+- **Flutter app (định hướng):**
+  - Gọi REST API để lấy dữ liệu & dự đoán.
+  - Đăng ký Firebase Cloud Messaging để nhận thông báo khi `prediction > ngưỡng` hoặc `anomaly == true`.
+  - Hiển thị lịch sử 24h, biểu đồ line, danh sách cảnh báo.
 
-Hoặc với Windows, chỉ cần chạy file `run_app.bat`.
+## 7. Kế hoạch thực hiện (cập nhật)
 
-## Cách sử dụng
+| STT | Công việc | Sản phẩm | Thời gian |
+|-----|-----------|----------|-----------|
+| 1 | Viết & bảo vệ đề cương | Tài liệu PL2, slide | 30/05 – 05/06/2025 |
+| 2 | Nghiên cứu lý thuyết | MQTT, IoT, PMS7003, MQ135, InfluxDB, Grafana, Flask/REST, Firebase, ML time-series | 06/06 – 20/06/2025 |
+| 3 | Chế tạo phần cứng | PCB, ESP32, sensor, mô hình | 20/06 – 10/07/2025 |
+| 4 | Xây dựng REST & pipeline dữ liệu | Flask/FastAPI, MQTT↔Influx | 10/07 – 20/07/2025 |
+| **5** | **Huấn luyện mô hình dự đoán 30–60 phút (LSTM/GRU/RF)** | Script `training/train_forecasting.py`, artifact lưu Influx | **20/07 – 10/08/2025** |
+| **6** | **Phát hiện bất thường (Isolation Forest / Autoencoder)** | Dịch vụ anomaly, dashboard hiển thị | **20/07 – 10/08/2025** |
+| 7 | Ứng dụng di động + FCM | App Flutter, push notification | 20/07 – 10/08/2025 |
+| 8 | Triển khai thực tế (3 vị trí) | Dữ liệu thực tế, report so sánh | 10/08 – 15/08/2025 |
+| 9 | Báo cáo giữa kỳ | File báo cáo, slide, demo AI dự đoán + anomaly | 25/08 – 08/09/2025 |
+| 10 | Báo cáo kiểm tra trùng lặp | Bản thảo hoàn chỉnh | 10/12 – 20/12/2025 |
+| 11 | Bảo vệ khóa luận | Slide, demo, app | 25/12 – 31/12/2025 |
 
-### Ứng dụng Web
+## 8. Công nghệ và thư viện
 
-1. Khởi động server Django
-2. Truy cập ứng dụng tại http://127.0.0.1:8000/
-3. Sử dụng giao diện để:
-   - Tải lên ảnh để nhận diện cảm xúc
-   - Sử dụng webcam để nhận diện theo thời gian thực
-   - Tải lên video để phân tích cảm xúc
+- **Firmware:** ESP-IDF / Arduino, PubSubClient, ArduinoJson.
+- **Edge & Backend:** Python 3.11, FastAPI, Uvicorn, InfluxDB Client, Paho MQTT, APScheduler.
+- **AI:** PyTorch (LSTM/GRU Autoencoder), Scikit-learn (RandomForest, IsolationForest), pandas, numpy.
+- **DevOps:** Docker Compose (Mosquitto, InfluxDB, Grafana, Backend).
 
-### Jupyter Notebooks
+## 9. Hướng mở rộng
 
-Repository bao gồm hai Jupyter notebooks:
+- Tự động sinh cảnh báo bằng SMS/Zalo OA.
+- Tích hợp thêm cảm biến môi trường (nhiệt độ, độ ẩm, tiếng ồn).
+- Deploy mô hình lên cloud để tổng hợp nhiều điểm đo.
+- Huấn luyện lại mô hình hằng ngày với pipeline Airflow.
 
-- `model.ipynb`: Mô tả quá trình huấn luyện mô hình và đánh giá hiệu suất
-- `demo.ipynb`: Cung cấp demo đơn giản về nhận diện cảm xúc theo thời gian thực qua webcam
-
-Để chạy các notebooks:
-```bash
-jupyter notebook
-```
-
-## Chi tiết về mô hình
-
-### Các mô hình Machine Learning được sử dụng
-
-Dự án kết hợp nhiều phương pháp machine learning khác nhau để đạt hiệu quả tối ưu:
-
-1. **KNN (K-Nearest Neighbors)**:
-   - Sử dụng scikit-learn's KNeighborsClassifier
-   - Tối ưu hóa siêu tham số với GridSearchCV để tìm số neighbors và trọng số tối ưu
-   - Đánh giá bằng accuracy và classification report
-   - Hiệu suất: Độ chính xác ~85% trên tập dữ liệu CK+
-
-2. **SVM (Support Vector Machine)**:
-   - Sử dụng SVC từ scikit-learn với kernel RBF
-   - Tối ưu hóa siêu tham số C, kernel và gamma
-   - Cài đặt cả phiên bản OneVsRestSVM tùy chỉnh với Mini-Batch Gradient Descent và Momentum
-   - Hiệu suất: Độ chính xác ~88-90% trên tập dữ liệu CK+
-
-3. **CNN (Convolutional Neural Network)**: 
-   - Mạng neural tích chập gồm 6 lớp tích chập và 2 lớp fully connected
-   - Hiệu quả trong việc nắm bắt các đặc trưng không gian trong khuôn mặt
-   - Kiến trúc: 3 khối gồm 2 lớp Conv2D, 1 lớp MaxPooling2D và Dropout (0.25)
-   - Sử dụng lớp Dense 2048 units với activation ReLU, Dropout (0.5)
-   - Lớp đầu ra softmax 7 units tương ứng với 7 cảm xúc
-   - Hiệu suất: Độ chính xác ~91% độ chính xác
-
-4. **Hybrid Models**:
-   - **CNN + SIFT**: Kết hợp CNN với SIFT features (~93% độ chính xác)
-   - **CNN + DSIFT**: Kết hợp CNN với Dense SIFT features (~94% độ chính xác)
-   - **Ensemble Hybrid**: Kết hợp cả ba mô hình (~95% độ chính xác)
-
-### Phương pháp trích xuất đặc trưng
-
-Dự án sử dụng nhiều phương pháp trích xuất đặc trưng:
-
-1. **HOG (Histogram of Oriented Gradients)**:
-   - Trích xuất thông tin về hướng gradient trong ảnh
-   - Cấu hình: 9 orientations, 8x8 pixels per cell, 2x2 cells per block
-   - Hiệu quả trong việc mô tả hình dạng và cấu trúc của khuôn mặt
-
-2. **DCT (Discrete Cosine Transform)**:
-   - Chuyển đổi không gian ảnh sang không gian tần số
-   - Giữ 8x8 hệ số tần số thấp nhất (góc trên bên trái)
-   - Hiệu quả trong việc nén thông tin và loại bỏ nhiễu
-
-3. **SIFT (Scale-Invariant Feature Transform)**:
-   - Trích xuất đặc trưng bền vững với sự thay đổi về tỷ lệ, ánh sáng và góc độ
-   - Sử dụng hai phương pháp:
-     - **Regular SIFT**: Phát hiện keypoints tự động trên khuôn mặt
-     - **Dense SIFT**: Tạo keypoints trên lưới đều đặn với bước nhảy 12 pixel
-
-4. **Bag of Visual Words (BoW)**:
-   - Xây dựng từ điển hình ảnh bằng K-Means (K=2048)
-   - Biểu diễn ảnh dưới dạng histogram tần suất xuất hiện của các "visual words"
-   - Chuẩn hóa vector đặc trưng với StandardScaler
-   - Áp dụng cho cả SIFT và Dense SIFT
-
-### Kỹ thuật tiền xử lý
-
-1. **Face Detection**: Sử dụng Haar Cascade của OpenCV để phát hiện khuôn mặt
-
-2. **Face Alignment**:
-   - Sử dụng dlib để phát hiện 68 điểm landmark
-   - Xoay và căn chỉnh khuôn mặt dựa trên vị trí của hai mắt
-
-3. **Histogram Equalization**: 
-   - Tăng cường độ tương phản của ảnh
-   - Làm nổi bật các đặc trưng quan trọng trong các vùng tối hoặc sáng
-
-4. **Data Augmentation**:
-   - Lật ngang ảnh
-   - Xoay ngẫu nhiên (-30° đến 30°)
-   - Cắt ngẫu nhiên từ các vị trí khác nhau
-   - Biến đổi affine (thay đổi hình dạng)
-
-5. **Chuẩn hóa và giảm chiều**:
-   - Chuẩn hóa đặc trưng với StandardScaler
-   - Giảm chiều với PCA, giữ 90-95% phương sai giải thích
-
-### Mô hình kết hợp cuối cùng
-
-Quy trình dự đoán của mô hình đề xuất:
-
-1. Tiền xử lý ảnh đầu vào
-2. Phát hiện khuôn mặt sử dụng Haar Cascade
-3. Cho mỗi khuôn mặt phát hiện được:
-   - Chạy ảnh qua mô hình CNN đơn thuần để có dự đoán thứ nhất
-   - Trích xuất đặc trưng SIFT, mã hóa bằng BoW, và kết hợp với CNN cho dự đoán thứ hai
-   - Trích xuất đặc trưng Dense SIFT, mã hóa BoW, và kết hợp với CNN cho dự đoán thứ ba
-4. Lấy trung bình kết quả của ba mô hình để có dự đoán cuối cùng
-5. Gán nhãn cảm xúc và độ tin cậy cho mỗi khuôn mặt
-
-Phương pháp kết hợp này cho phép hệ thống tận dụng điểm mạnh của từng phương pháp, tăng độ chính xác và khả năng chống nhiễu.
-
-## Dữ liệu huấn luyện
-
-Mô hình được huấn luyện trên bộ dữ liệu CK+ (Extended Cohn-Kanade), bao gồm các biểu hiện khuôn mặt được gán nhãn cho bảy cảm xúc mà hệ thống có thể nhận diện. Dữ liệu được tăng cường (augmented) bằng các kỹ thuật:
-- Lật ngang ảnh
-- Xoay ngẫu nhiên (-30° đến 30°)
-- Cắt ngẫu nhiên
-- Biến đổi affine
-
-## Hiệu suất
-
-Mô hình đạt được độ chính xác cao trong nhận diện cảm xúc trên tập dữ liệu CK+:
-- Mô hình CNN đơn lẻ: ~91% độ chính xác
-- Mô hình kết hợp CNN-SIFT: ~93% độ chính xác 
-- Mô hình kết hợp CNN-DSIFT: ~94% độ chính xác
-- Mô hình kết hợp cuối (ensemble): ~95% độ chính xác
-
-## Cải tiến trong tương lai
-
-- Nâng cao độ chính xác trong điều kiện ánh sáng khó khăn
-- Thêm hỗ trợ cho các cảm xúc phức tạp và tinh tế hơn
-- Tối ưu hóa xử lý video để đạt hiệu suất tốt hơn
-- Triển khai theo dõi cảm xúc theo thời gian
-- Thêm hỗ trợ xử lý hàng loạt nhiều ảnh
-
-## Các trường hợp áp dụng
-
-- Các ứng dụng trợ lý ảo tương tác
-- Kiểm tra mức độ tương tác của người dùng trong học trực tuyến
-- Hệ thống giám sát an ninh
-- Nghiên cứu tâm lý và ứng dụng lâm sàng
-- Phân tích cảm xúc trong tiếp thị và nghiên cứu thị trường
-
-## Giấy phép
-
-[Thêm thông tin giấy phép của bạn tại đây]
-
-## Người đóng góp
-
-- Võ Trọng Nhơn
-- Dương Vũ Khôi Nguyên
-
-## Lời cảm ơn
-
-- Nhà cung cấp bộ dữ liệu CK+
-- Cộng đồng TensorFlow và OpenCV
-- Các bài báo và tài liệu nghiên cứu về nhận diện cảm xúc
-- Các thành viên trong nhóm đã hỗ trợ trong quá trình phát triển dự án
-```
+---
+**Liên hệ:** khoi.nguyenust@gmail.com – Sẵn sàng chia sẻ thêm schematic PCB và thiết kế enclosure 3D khi cần.
