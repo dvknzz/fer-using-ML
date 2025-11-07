@@ -1,0 +1,16 @@
+mqtt:
+  host: 127.0.0.1
+  port: 1883
+  topic: environment/air_quality
+  client_id: raspberry-pi-collector
+  keepalive: 60
+
+influxdb:
+  url: http://localhost:8086
+  token: YOUR_INFLUXDB_TOKEN
+  org: your_org
+  bucket: air_quality
+
+buffer:
+  max_records: 100
+  flush_interval_seconds: 10

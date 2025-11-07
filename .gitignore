@@ -1,1 +1,30 @@
-*.h5
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.venv/
+venv/
+.env
+
+# PlatformIO
+.pio/
+
+# Models & data
+ml/models/*.keras
+ml/models/*.h5
+ml/models/*.tflite
+ml/models/*.onnx
+ml/models/*.pth
+ml/models/*.ckpt
+ml/models/*.json
+ml/models/*.pb
+
+# Notebook checkpoints
+.ipynb_checkpoints/
+
+# OS files
+.DS_Store
+Thumbs.db
