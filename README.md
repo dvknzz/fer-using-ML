@@ -16,7 +16,9 @@ ESP32 (PMS7003 + MQ135) → MQTT → Raspberry Pi 4 → InfluxDB + Flask API →
 
 ## Sơ đồ nguyên lý phần cứng
 
-Bạn có thể xem nhanh sơ đồ mô tả bằng Mermaid bên dưới hoặc mở tài liệu chi tiết trong [`docs/hardware_schematic.md`](docs/hardware_schematic.md). File Markdown này đọc được bằng mọi trình soạn thảo văn bản (VS Code, Obsidian, Notepad, …) và trình bày đầy đủ bảng nối dây cùng ghi chú nguồn.
+Bạn có thể xem nhanh sơ đồ mô tả bằng Mermaid bên dưới hoặc mở tài liệu chi tiết trong [`docs/hardware_schematic.md`](docs/hardware_schematic.md). Ngoài ra, repo cung cấp thêm bản vẽ **SVG** thuần văn bản tại [`docs/hardware_schematic.svg`](docs/hardware_schematic.svg) để bạn tải về, chèn vào báo cáo hoặc in ấn mà không gặp cảnh báo "tệp nhị phân không được hỗ trợ" trên GitHub.
+
+![Sơ đồ nguyên lý dạng SVG](docs/hardware_schematic.svg)
 
 ```mermaid
 flowchart LR
@@ -76,7 +78,6 @@ flowchart LR
 │   └── utils.py
 ├── ml/models/                     # Thư mục lưu mô hình sau khi huấn luyện (joblib/keras)
 ├── configs/collector.example.yaml # Cấu hình mẫu cho collector
-├── demo.ipynb, model.ipynb        # Notebook gốc (tham khảo)
 └── README.md                      # Tài liệu này
 ```
 

@@ -5,6 +5,7 @@
 - Mở file `.md` bằng **Visual Studio Code**, **Obsidian**, hoặc bất kỳ trình soạn thảo Markdown nào (thậm chí Notepad/VSCode đều đọc được). Nếu muốn xem với định dạng đẹp, hãy chọn chế độ “Preview”.
 - Bạn cũng có thể truy cập trực tiếp trên GitHub: vào thư mục `docs/`, bấm vào file `hardware_schematic.md` và chọn tab **Preview**.
 - Sơ đồ được biểu diễn bằng **Mermaid** ngay trong tài liệu, thuận tiện khi làm việc ngoại tuyến hoặc đưa vào báo cáo.
+- Nếu cần ảnh để chèn vào slide hoặc in ấn, sử dụng tệp [`hardware_schematic.svg`](hardware_schematic.svg). Đây là định dạng văn bản (không phải nhị phân) nên xem tốt trên GitHub và có thể mở bằng trình duyệt bất kỳ.
 
 ```mermaid
 flowchart LR
