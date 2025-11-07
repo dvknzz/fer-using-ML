@@ -14,6 +14,25 @@ ESP32 (PMS7003 + MQ135) → MQTT → Raspberry Pi 4 → InfluxDB + Flask API →
 3. **ML pipeline** (TensorFlow + Scikit-learn) huấn luyện mô hình LSTM/GRU/Random Forest dự báo PM2.5 trong 30–60 phút, đồng thời huấn luyện Isolation Forest hoặc Autoencoder cho phát hiện bất thường.
 4. **Flask REST API** cung cấp endpoint đọc dữ liệu lịch sử, dự đoán tương lai, và danh sách bất thường để tích hợp với Grafana, ứng dụng Android, hoặc hệ thống cảnh báo.
 
+## Sơ đồ nguyên lý phần cứng
+
+Sơ đồ chi tiết các chân kết nối giữa ESP32, PMS7003 và MQ135 nằm trong [`docs/hardware_schematic.md`](docs/hardware_schematic.md). Bạn có thể xem trực tiếp bằng trình đọc Markdown hỗ trợ Mermaid để thấy sơ đồ như dưới đây:
+
+```mermaid
+graph TD
+    VUSB[5V USB] --> ESP32Vin[ESP32 Vin]
+    VUSB --> PMSVCC[PMS7003 VCC]
+    VUSB --> MQVCC[MQ135 VCC]
+    ESP32GND[ESP32 GND] --> PMSGND[PMS7003 GND]
+    ESP32GND --> MQGND[MQ135 GND]
+    PMS_Tx[PMS7003 TX] --> ESP32_RX2[ESP32 GPIO16 (RX2)]
+    PMS_Rx[PMS7003 RX] --> ESP32_TX2[ESP32 GPIO17 (TX2)]
+    MQ_AO[MQ135 AO] --> ESP32_ADC[ESP32 GPIO34 (ADC)]
+    ESP32_WiFi[ESP32 Wi-Fi MQTT] -.-> RPi[MQTT Broker trên Raspberry Pi 4]
+```
+
+> ⚠️ Giữ chân `SET` của PMS7003 ở mức cao (qua điện trở 10kΩ tới Vin) để cảm biến luôn hoạt động; kéo xuống GND nếu muốn đưa vào chế độ ngủ.
+
 ## Cấu trúc thư mục
 
 ```
